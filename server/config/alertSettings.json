@@ -1,0 +1,16 @@
+{
+  "expiryThresholds": {
+    "critical": 7,
+    "warning": 30,
+    "upcoming": 90
+  },
+  "stockThresholds": {
+    "critical": 3,
+    "warning": 5
+  },
+  "checkIntervals": {
+    "quickCheck": 5,
+    "regularCheck": 30,
+    "deepScan": 240
+  }
+}
