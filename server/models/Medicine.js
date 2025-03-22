@@ -4,18 +4,18 @@ const medicineSchema = new mongoose.Schema({
   // Basic Information
   name: {
     type: String,
-    required: true,
+    required: [true, 'Medicine name is required'],
     trim: true
   },
   genericName: {
     type: String,
-    required: true,
+    required: [true, 'Generic name is required'],
     trim: true
   },
   category: {
     type: String,
-    required: true,
-    enum: ['Tablets', 'Capsules', 'Syrups', 'Injections', 'Ointments', 'Drops', 'Inhalers', 'Patches', 'Suppositories', 'Solutions']
+    enum: ['antibiotics', 'painkillers', 'vitamins', 'antiviral', 'anticold', 'antidiabetic', 'cardiovascular', 'gastrointestinal', 'respiratory', 'other'],
+    default: 'other'
   },
   therapeuticCategory: {
     type: String,
@@ -26,7 +26,7 @@ const medicineSchema = new mongoose.Schema({
   // Manufacturer & Supply
   manufacturer: {
     type: String,
-    required: true,
+    required: [true, 'Manufacturer is required'],
     trim: true
   },
   supplier: {
@@ -35,13 +35,13 @@ const medicineSchema = new mongoose.Schema({
   },
   batchNumber: {
     type: String,
-    required: true,
+    required: [true, 'Batch number is required'],
     trim: true
   },
   barcode: {
     type: String,
-    unique: true,
-    sparse: true
+    trim: true,
+    index: true  // Adding index for fast barcode lookups
   },
   barcodeType: {
     type: String,
@@ -85,26 +85,25 @@ const medicineSchema = new mongoose.Schema({
   },
   unit: {
     type: String,
-    required: true,
-    enum: ['Tablets', 'Capsules', 'Bottles', 'Tubes', 'Pieces', 'Strips', 'Vials', 'Ampoules', 'ml', 'mg', 'g']
+    default: 'tablet',
+    enum: ['tablet', 'bottle', 'strip', 'box', 'vial', 'ampule', 'tube', 'sachet', 'capsule', 'other']
   },
 
   // Stock & Price
   stock: {
     type: Number,
-    required: true,
-    min: 0
+    required: [true, 'Stock quantity is required'],
+    min: [0, 'Stock cannot be negative']
   },
   minimumStock: {
     type: Number,
-    required: true,
-    min: 0,
-    default: 10
+    default: 10,
+    min: [0, 'Minimum stock cannot be negative']
   },
   price: {
     type: Number,
-    required: true,
-    min: 0
+    required: [true, 'Price is required'],
+    min: [0, 'Price cannot be negative']
   },
   costPrice: {
     type: Number,
@@ -126,7 +125,7 @@ const medicineSchema = new mongoose.Schema({
   },
   expiryDate: {
     type: Date,
-    required: true
+    required: [true, 'Expiry date is required']
   },
 
   // Medical Information
@@ -177,24 +176,28 @@ medicineSchema.index({ therapeuticCategory: 1 });
 medicineSchema.index({ manufacturer: 1 });
 medicineSchema.index({ supplier: 1 });
 
-// Add methods to check medicine status
-medicineSchema.methods.isLowStock = function() {
-  return this.stock <= this.minimumStock;
-};
-
-medicineSchema.methods.needsReorder = function() {
-  return this.stock <= this.reorderLevel;
-};
-
-medicineSchema.methods.isExpired = function() {
+// Virtual for checking if medicine is expired
+medicineSchema.virtual('isExpired').get(function() {
   return new Date() > this.expiryDate;
-};
+});
 
-medicineSchema.methods.isExpiringSoon = function(days = 30) {
-  const expiryThreshold = new Date();
-  expiryThreshold.setDate(expiryThreshold.getDate() + days);
-  return this.expiryDate <= expiryThreshold && !this.isExpired();
-};
+// Virtual for checking if medicine is low in stock
+medicineSchema.virtual('isLowStock').get(function() {
+  return this.stock <= this.minimumStock;
+});
+
+// Virtual for days until expiry
+medicineSchema.virtual('daysUntilExpiry').get(function() {
+  const today = new Date();
+  const expiryDate = new Date(this.expiryDate);
+  const diffTime = Math.abs(expiryDate - today);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+});
+
+// Ensure virtuals are included when converting to JSON
+medicineSchema.set('toJSON', { virtuals: true });
+medicineSchema.set('toObject', { virtuals: true });
 
 // Add method to record scan
 medicineSchema.methods.recordScan = async function(action, quantity = 0, notes = '', scannedBy = 'system') {
@@ -207,9 +210,12 @@ medicineSchema.methods.recordScan = async function(action, quantity = 0, notes =
     timestamp: new Date()
   });
   
+  // IMPORTANT: Don't update stock here for 'stock_out' action that comes from sales
+  // as the saleController already updates the stock directly
   if (action === 'stock_in') {
     this.stock += quantity;
-  } else if (action === 'stock_out') {
+  } else if (action === 'stock_out' && !notes.includes('Sold in invoice')) {
+    // Only reduce stock if this is NOT from a sale (which would already have reduced stock)
     this.stock = Math.max(0, this.stock - quantity);
   }
   

@@ -1,3 +1,58 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Custom animations */
+@keyframes slide-in-right {
+  0% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes cart-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* Animation for success feedback */
+@keyframes successPulse {
+  0% { transform: scale(1); background-color: rgb(79, 70, 229); }
+  50% { transform: scale(1.05); background-color: rgb(16, 185, 129); }
+  100% { transform: scale(1); background-color: rgb(79, 70, 229); }
+}
+
+/* Custom utility classes */
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out forwards;
+}
+
+.animate-cart-bounce {
+  animation: cart-bounce 2s ease-in-out infinite;
+}
+
+.animate-success {
+  animation: successPulse 0.6s ease-in-out;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Custom styles for billing panel */
+.billing-panel-backdrop {
+  backdrop-filter: blur(2px);
+}

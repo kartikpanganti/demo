@@ -301,6 +301,7 @@ export const getLowStockMedicines = async (req, res) => {
 // Get expiring medicines (within 3 months)
 export const getExpiringMedicines = async (req, res) => {
   try {
+    console.log('Fetching expiring medicines (3 months)...');
     const threeMonthsFromNow = new Date();
     threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
     
@@ -311,8 +312,10 @@ export const getExpiringMedicines = async (req, res) => {
       }
     }).sort({ expiryDate: 1 });
     
+    console.log(`Found ${medicines.length} expiring medicines`);
     res.status(200).json(medicines);
   } catch (error) {
+    console.error('Error in getExpiringMedicines:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -572,6 +575,7 @@ export const exportMedicines = async (req, res) => {
 // Get medicines with expiry tracking information
 export const getExpiryTracking = async (req, res) => {
   try {
+    console.log('Fetching expiry tracking data with params:', req.query);
     const { timeframe, sortField = 'expiryDate', sortDirection = 'asc', search, category, manufacturer } = req.query;
     
     // Build the query based on timeframe and filters
@@ -580,6 +584,7 @@ export const getExpiryTracking = async (req, res) => {
     
     // Add timeframe filter
     if (timeframe) {
+      console.log(`Filtering by timeframe: ${timeframe}`);
       switch (timeframe) {
         case 'expired':
           query.expiryDate = { $lt: today };
@@ -613,6 +618,7 @@ export const getExpiryTracking = async (req, res) => {
     
     // Add search filter
     if (search) {
+      console.log(`Applying search filter: ${search}`);
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
         { batchNumber: { $regex: search, $options: 'i' } }
@@ -621,15 +627,20 @@ export const getExpiryTracking = async (req, res) => {
     
     // Add category filter
     if (category) {
+      console.log(`Filtering by category: ${category}`);
       query.category = category;
     }
     
     // Add manufacturer filter
     if (manufacturer) {
+      console.log(`Filtering by manufacturer: ${manufacturer}`);
       query.manufacturer = manufacturer;
     }
     
+    console.log('Final query:', JSON.stringify(query));
+    
     // Get stats for all timeframes regardless of current filter
+    console.log('Calculating expiry statistics...');
     const stats = {
       expired: await Medicine.countDocuments({ expiryDate: { $lt: today } }),
       critical: await Medicine.countDocuments({
@@ -654,6 +665,7 @@ export const getExpiryTracking = async (req, res) => {
         expiryDate: { $gt: new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000) }
       })
     };
+    console.log('Expiry statistics:', stats);
     
     // Sort options
     const sort = {};
@@ -665,8 +677,11 @@ export const getExpiryTracking = async (req, res) => {
       sort[sortField] = sortDirection === 'asc' ? 1 : -1;
     }
     
+    console.log(`Sorting by ${sortField} in ${sortDirection} order`);
+    
     // Get medicines with the applied filters
     const medicines = await Medicine.find(query).sort(sort);
+    console.log(`Found ${medicines.length} medicines matching criteria`);
     
     // Add calculated daysUntilExpiry field
     const medicinesWithDays = medicines.map(medicine => {
@@ -679,14 +694,19 @@ export const getExpiryTracking = async (req, res) => {
       };
     });
     
+    console.log('Sending response with medicines and stats');
     res.status(200).json({
       medicines: medicinesWithDays,
       stats,
       totalCount: medicinesWithDays.length
     });
   } catch (error) {
-    console.error('Error fetching expiry tracking data:', error);
-    res.status(500).json({ message: 'Error fetching expiry tracking data', error: error.message });
+    console.error('Error in getExpiryTracking:', error);
+    res.status(500).json({ 
+      message: 'Error fetching expiry tracking data', 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
 
@@ -709,5 +729,100 @@ export const getDosageForms = async (req, res) => {
   } catch (error) {
     console.error('Error fetching dosage forms:', error);
     res.status(500).json({ message: 'Error fetching dosage forms', error: error.message });
+  }
+};
+
+// Diagnostic function for testing expiry date handling
+export const testExpiryDates = async (req, res) => {
+  try {
+    console.log('Running expiry date diagnostics...');
+    const today = new Date();
+    
+    // Test queries for different timeframes
+    const diagnosticResults = {
+      today: today.toISOString(),
+      queries: {
+        expired: { expiryDate: { $lt: today } },
+        critical: { 
+          expiryDate: { 
+            $gte: today, 
+            $lte: new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000) 
+          } 
+        },
+        warning: { 
+          expiryDate: { 
+            $gt: new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000), 
+            $lte: new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000) 
+          } 
+        },
+        upcoming: { 
+          expiryDate: { 
+            $gt: new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000), 
+            $lte: new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000) 
+          } 
+        },
+        safe: { 
+          expiryDate: { 
+            $gt: new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000) 
+          } 
+        }
+      },
+      counts: {
+        expired: await Medicine.countDocuments({ expiryDate: { $lt: today } }),
+        critical: await Medicine.countDocuments({
+          expiryDate: {
+            $gte: today,
+            $lte: new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
+          }
+        }),
+        warning: await Medicine.countDocuments({
+          expiryDate: {
+            $gt: new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000),
+            $lte: new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)
+          }
+        }),
+        upcoming: await Medicine.countDocuments({
+          expiryDate: {
+            $gt: new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000),
+            $lte: new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000)
+          }
+        }),
+        safe: await Medicine.countDocuments({
+          expiryDate: { $gt: new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000) }
+        })
+      },
+      sample: {
+        expired: await Medicine.find({ expiryDate: { $lt: today } }).limit(2),
+        critical: await Medicine.find({
+          expiryDate: {
+            $gte: today,
+            $lte: new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
+          }
+        }).limit(2),
+        warning: await Medicine.find({
+          expiryDate: {
+            $gt: new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000),
+            $lte: new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)
+          }
+        }).limit(2),
+        upcoming: await Medicine.find({
+          expiryDate: {
+            $gt: new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000),
+            $lte: new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000)
+          }
+        }).limit(2),
+        safe: await Medicine.find({
+          expiryDate: { $gt: new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000) }
+        }).limit(2)
+      }
+    };
+    
+    res.status(200).json(diagnosticResults);
+  } catch (error) {
+    console.error('Error in expiry date diagnostics:', error);
+    res.status(500).json({ 
+      message: 'Error running expiry date diagnostics', 
+      error: error.message
+    });
   }
 }; 

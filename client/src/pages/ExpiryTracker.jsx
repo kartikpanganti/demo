@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import AlertConfigModal from '../components/AlertConfigModal';
+import MedicineDetailsModal from '../components/MedicineDetailsModal';
 import {
   CalendarIcon,
   ExclamationTriangleIcon,
@@ -15,7 +16,8 @@ import {
   CheckCircleIcon,
   XMarkIcon,
   CalendarDaysIcon,
-  CogIcon
+  CogIcon,
+  PencilIcon
 } from '@heroicons/react/24/outline';
 
 function ExpiryTracker() {
@@ -42,6 +44,10 @@ function ExpiryTracker() {
   const [showActions, setShowActions] = useState(false);
   const [selectedMedicines, setSelectedMedicines] = useState([]);
   const [showConfigModal, setShowConfigModal] = useState(false);
+  
+  // Medicine Details Modal state
+  const [medicineModalOpen, setMedicineModalOpen] = useState(false);
+  const [selectedMedicineId, setSelectedMedicineId] = useState(null);
 
   // Define timeframes in days
   const TIMEFRAMES = {
@@ -62,7 +68,7 @@ function ExpiryTracker() {
       setLoading(true);
       
       // Construct the API query based on filters
-      let endpoint = `${API_BASE_URL}/api/medicines/expiry`;
+      let endpoint = `${API_BASE_URL}/api/medicines/expiry-tracking`;
       
       // Add query parameters
       const params = {
@@ -72,9 +78,11 @@ function ExpiryTracker() {
         ...filters
       };
 
+      console.log('Fetching expiry data with params:', params);
       const response = await axios.get(endpoint, { params });
       
       if (response.data) {
+        console.log('Expiry data received:', response.data);
         setMedicines(response.data.medicines || []);
         setStats(response.data.stats || {
           expired: 0,
@@ -86,6 +94,16 @@ function ExpiryTracker() {
       }
     } catch (error) {
       console.error('Error fetching medicines:', error);
+      // Add more detailed error logging
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error('Error response data:', error.response.data);
+        console.error('Error response status:', error.response.status);
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error('No response received:', error.request);
+      }
     } finally {
       setLoading(false);
     }
@@ -179,6 +197,12 @@ function ExpiryTracker() {
     if (daysUntilExpiry <= 30) return 'Warning';
     if (daysUntilExpiry <= 90) return 'Upcoming';
     return 'Safe';
+  };
+
+  const handleViewMedicine = (medicineId) => {
+    if (!medicineId) return;
+    setSelectedMedicineId(medicineId);
+    setMedicineModalOpen(true);
   };
 
   if (loading && medicines.length === 0) {
@@ -484,11 +508,17 @@ function ExpiryTracker() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <Link
-                          to={`/show/${medicine._id}`}
+                        <button
+                          onClick={() => handleViewMedicine(medicine._id)}
                           className="text-blue-600 hover:text-blue-900 mr-3"
                         >
                           <EyeIcon className="w-5 h-5 inline" />
+                        </button>
+                        <Link
+                          to={`/edit/${medicine._id}`}
+                          className="text-green-600 hover:text-green-900 mr-3"
+                        >
+                          <PencilIcon className="w-5 h-5 inline" />
                         </Link>
                         {daysUntilExpiry <= 30 && (
                           <button
@@ -526,6 +556,13 @@ function ExpiryTracker() {
           console.log('Alert config updated:', config);
           fetchMedicines(); // Refresh data after config changes
         }}
+      />
+
+      {/* Medicine Details Modal */}
+      <MedicineDetailsModal
+        isOpen={medicineModalOpen}
+        onClose={() => setMedicineModalOpen(false)}
+        medicineId={selectedMedicineId}
       />
     </div>
   );

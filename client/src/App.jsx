@@ -5,10 +5,12 @@ import Inventory from './pages/Inventory';
 import AddMedicine from './pages/AddMedicine';
 import EditMedicine from './pages/EditMedicine';
 import ShowMedicine from './pages/ShowMedicine';
-import LowStock from './pages/LowStock';
 import ExpiringMedicines from './pages/ExpiringMedicines';
 import Alerts from './pages/Alerts';
 import ExpiryTracker from './pages/ExpiryTracker';
+import ExpiryDiagnostic from './pages/ExpiryDiagnostic';
+import Sales from './pages/Sales';
+import SalesHistory from './pages/SalesHistory';
 
 function App() {
   return (
@@ -23,10 +25,12 @@ function App() {
             <Route path="/edit/:id" element={<EditMedicine />} />
             <Route path="/show/:id" element={<ShowMedicine />} />
             <Route path="/medicines/:id" element={<ShowMedicine />} />
-            <Route path="/low-stock" element={<LowStock />} />
             <Route path="/expiring" element={<ExpiringMedicines />} />
             <Route path="/alerts" element={<Alerts />} />
             <Route path="/expiry-tracker" element={<ExpiryTracker />} />
+            <Route path="/expiry-diagnostic" element={<ExpiryDiagnostic />} />
+            <Route path="/sales" element={<Sales />} />
+            <Route path="/sales-history" element={<SalesHistory />} />
           </Routes>
         </main>
       </div>

@@ -5,9 +5,11 @@ import { API_BASE_URL } from '../config';
 import { 
   TrashIcon, PencilIcon, ArrowUpIcon, ArrowDownIcon, 
   AdjustmentsHorizontalIcon, ChartBarIcon, ExclamationTriangleIcon,
-  PlusIcon, MinusIcon, ArrowDownTrayIcon,
+  PlusIcon, MinusIcon, ArrowDownTrayIcon, EyeIcon,
   ChevronDoubleLeftIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDoubleRightIcon
 } from '@heroicons/react/24/outline';
+import MedicineDetailsModal from '../components/MedicineDetailsModal';
+import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
 
 function Inventory() {
   const [medicines, setMedicines] = useState([]);
@@ -42,6 +44,13 @@ function Inventory() {
     direction: 'asc'
   });
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedMedicineId, setSelectedMedicineId] = useState(null);
+
+  // Delete confirmation modals
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [medicineToDelete, setMedicineToDelete] = useState(null);
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
 
   useEffect(() => {
     fetchMedicines();
@@ -129,30 +138,36 @@ function Inventory() {
     }
   };
 
+  const confirmDelete = (medicine) => {
+    setMedicineToDelete(medicine);
+    setDeleteModalOpen(true);
+  };
+
+  const confirmBulkDelete = () => {
+    if (selectedMedicines.length === 0) return;
+    setBulkDeleteModalOpen(true);
+  };
+
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this medicine?')) {
-      try {
-        await axios.delete(`${API_BASE_URL}/api/medicines/${id}`);
-        fetchMedicines();
-      } catch (error) {
-        console.error('Error deleting medicine:', error);
-        alert('Error deleting medicine. Please try again.');
-      }
+    try {
+      await axios.delete(`${API_BASE_URL}/api/medicines/${id}`);
+      fetchMedicines();
+    } catch (error) {
+      console.error('Error deleting medicine:', error);
+      alert('Error deleting medicine. Please try again.');
     }
   };
 
   const handleBulkDelete = async () => {
-    if (window.confirm(`Are you sure you want to delete ${selectedMedicines.length} medicines?`)) {
-      try {
-        await Promise.all(selectedMedicines.map(id => 
-          axios.delete(`${API_BASE_URL}/api/medicines/${id}`)
-        ));
-        setSelectedMedicines([]);
-        fetchMedicines();
-      } catch (error) {
-        console.error('Error performing bulk delete:', error);
-        alert('Error deleting medicines. Please try again.');
-      }
+    try {
+      await Promise.all(selectedMedicines.map(id => 
+        axios.delete(`${API_BASE_URL}/api/medicines/${id}`)
+      ));
+      setSelectedMedicines([]);
+      fetchMedicines();
+    } catch (error) {
+      console.error('Error performing bulk delete:', error);
+      alert('Error deleting medicines. Please try again.');
     }
   };
 
@@ -292,6 +307,31 @@ function Inventory() {
   const handlePageClick = (page) => {
     if (page === '...') return;
     setCurrentPage(page);
+  };
+
+  const openMedicineModal = (medicineId) => {
+    setSelectedMedicineId(medicineId);
+    setModalOpen(true);
+  };
+
+  const closeMedicineModal = () => {
+    setModalOpen(false);
+    setTimeout(() => {
+      setSelectedMedicineId(null);
+    }, 300);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (medicineToDelete) {
+      handleDelete(medicineToDelete._id);
+      setDeleteModalOpen(false);
+      setMedicineToDelete(null);
+    }
+  };
+
+  const handleBulkDeleteConfirm = () => {
+    handleBulkDelete();
+    setBulkDeleteModalOpen(false);
   };
 
   if (loading) {
@@ -521,10 +561,12 @@ function Inventory() {
           </span>
           <div className="flex space-x-4">
             <button
-              onClick={handleBulkDelete}
-              className="btn btn-danger flex items-center"
+              onClick={confirmBulkDelete}
+              className="px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200
+                text-white bg-red-600 border border-red-700 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              disabled={loading || selectedMedicines.length === 0}
             >
-              <TrashIcon className="w-5 h-5 mr-2" />
+              <TrashIcon className="w-4 h-4 mr-1.5" />
               Delete Selected
             </button>
           </div>
@@ -664,12 +706,13 @@ function Inventory() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <Link
-                      to={`/show/${medicine._id}`}
-                      className="text-blue-600 hover:text-blue-900 mr-4"
+                    <button
+                      onClick={() => openMedicineModal(medicine._id)}
+                      className="text-blue-600 hover:text-blue-900 mr-4 inline-flex items-center"
                     >
+                      <EyeIcon className="w-4 h-4 mr-1" />
                       View
-                    </Link>
+                    </button>
                     <Link
                       to={`/edit/${medicine._id}`}
                       className="text-indigo-600 hover:text-indigo-900 mr-4"
@@ -677,10 +720,11 @@ function Inventory() {
                       Edit
                     </Link>
                     <button
-                      onClick={() => handleDelete(medicine._id)}
+                      onClick={() => confirmDelete(medicine)}
                       className="text-red-600 hover:text-red-900"
+                      title="Delete medicine"
                     >
-                      Delete
+                      <TrashIcon className="w-5 h-5" />
                     </button>
                   </td>
                 </tr>
@@ -811,6 +855,31 @@ function Inventory() {
           </div>
         </div>
       </div>
+      
+      {/* Medicine Details Modal */}
+      <MedicineDetailsModal 
+        isOpen={modalOpen}
+        onClose={closeMedicineModal}
+        medicineId={selectedMedicineId}
+      />
+
+      {/* Delete Confirmation Modal for single medicine */}
+      <DeleteConfirmationModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Medicine"
+        message={medicineToDelete ? `Are you sure you want to delete ${medicineToDelete.name}? This action cannot be undone.` : 'Are you sure you want to delete this medicine?'}
+      />
+      
+      {/* Bulk Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={bulkDeleteModalOpen}
+        onClose={() => setBulkDeleteModalOpen(false)}
+        onConfirm={handleBulkDeleteConfirm}
+        title="Delete Selected Medicines"
+        message={`Are you sure you want to delete ${selectedMedicines.length} selected medicines? This action cannot be undone.`}
+      />
     </div>
   );
 }

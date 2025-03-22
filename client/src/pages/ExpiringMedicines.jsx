@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { API_BASE_URL } from '../config';
 
 function ExpiringMedicines() {
   const navigate = useNavigate();
@@ -10,11 +11,23 @@ function ExpiringMedicines() {
   useEffect(() => {
     const fetchExpiringMedicines = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/api/medicines/expiring');
+        console.log('Fetching expiring medicines...');
+        const response = await axios.get(`${API_BASE_URL}/api/medicines/expiring`);
+        console.log('Expiring medicines data received:', response.data);
         setMedicines(response.data);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching expiring medicines:', error);
+        // Add more detailed error logging
+        if (error.response) {
+          // The request was made and the server responded with a status code
+          // that falls out of the range of 2xx
+          console.error('Error response data:', error.response.data);
+          console.error('Error response status:', error.response.status);
+        } else if (error.request) {
+          // The request was made but no response was received
+          console.error('No response received:', error.request);
+        }
         setLoading(false);
       }
     };
@@ -101,7 +114,7 @@ function ExpiringMedicines() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <button
-                        onClick={() => navigate(`/edit-medicine/${medicine._id}`)}
+                        onClick={() => navigate(`/edit/${medicine._id}`)}
                         className="text-primary hover:text-primary/80"
                       >
                         Edit
