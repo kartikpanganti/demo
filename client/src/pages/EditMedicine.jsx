@@ -11,7 +11,7 @@ const EditMedicine = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
-  
+
   const [formData, setFormData] = useState({
     name: '',
     genericName: '',
@@ -71,7 +71,7 @@ const EditMedicine = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       setLoading(true);
       await axios.put(`${API_BASE_URL}/api/medicines/${id}`, formData);
@@ -89,7 +89,7 @@ const EditMedicine = () => {
     }
   };
 
-  return (
+    return (
     <div className="max-w-7xl mx-auto">
       {/* Page header */}
       <div className="mb-8 border-b pb-5">
@@ -108,7 +108,7 @@ const EditMedicine = () => {
               <ArrowLeftIcon className="h-4 w-4 mr-2" />
               Back
             </button>
-          </div>
+      </div>
         </div>
       </div>
 
@@ -117,10 +117,10 @@ const EditMedicine = () => {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
         </div>
       )}
-
-      {error && (
+        
+        {error && (
         <div className="mb-6 bg-red-50 border-l-4 border-red-400 p-4">
-          <div className="flex items-center">
+            <div className="flex items-center">
             <ExclamationTriangleIcon className="h-5 w-5 text-red-400 mr-2" />
             <p className="text-sm text-red-700">{error}</p>
           </div>
@@ -134,9 +134,9 @@ const EditMedicine = () => {
             <p className="text-sm text-green-700">
               Medicine updated successfully! Redirecting to inventory...
             </p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {!loading && (
         <>
@@ -190,46 +190,46 @@ const EditMedicine = () => {
             {/* Basic Information Section */}
             <div className={activeTab === 'basic' ? 'block' : 'hidden'}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                <div>
+              <div>
                   <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
                     Medicine Name <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                <input
+                  type="text"
                     id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
                     className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                    required
-                  />
-                </div>
-                <div>
+                  required
+                />
+              </div>
+              <div>
                   <label htmlFor="genericName" className="block text-sm font-medium text-gray-700 mb-1">
                     Generic Name <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                <input
+                  type="text"
                     id="genericName"
-                    name="genericName"
-                    value={formData.genericName}
-                    onChange={handleInputChange}
+                  name="genericName"
+                  value={formData.genericName}
+                  onChange={handleInputChange}
                     className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                    required
-                  />
-                </div>
-                <div>
+                  required
+                />
+              </div>
+              <div>
                   <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
                     Category
                   </label>
-                  <select
+                <select
                     id="category"
-                    name="category"
-                    value={formData.category}
-                    onChange={handleInputChange}
+                  name="category"
+                  value={formData.category}
+                  onChange={handleInputChange}
                     className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                  >
-                    <option value="">Select Category</option>
+                >
+                  <option value="">Select Category</option>
                     <option value="antibiotics">Antibiotics</option>
                     <option value="painkillers">Painkillers</option>
                     <option value="vitamins">Vitamins</option>
@@ -240,19 +240,19 @@ const EditMedicine = () => {
                     <option value="gastrointestinal">Gastrointestinal</option>
                     <option value="respiratory">Respiratory</option>
                     <option value="other">Other</option>
-                  </select>
-                </div>
-                <div>
+                </select>
+              </div>
+              <div>
                   <label htmlFor="dosageForm" className="block text-sm font-medium text-gray-700 mb-1">
                     Dosage Form <span className="text-red-500">*</span>
                   </label>
-                  <select
+                <select
                     id="dosageForm"
                     name="dosageForm"
                     value={formData.dosageForm}
-                    onChange={handleInputChange}
+                  onChange={handleInputChange}
                     className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                    required
+                  required
                   >
                     <option value="">Select Dosage Form</option>
                     <option value="Tablet">Tablet</option>
@@ -266,7 +266,7 @@ const EditMedicine = () => {
                     <option value="Inhaler">Inhaler</option>
                     <option value="Patch">Patch</option>
                     <option value="Suppository">Suppository</option>
-                  </select>
+                </select>
                 </div>
               </div>
               
@@ -278,69 +278,69 @@ const EditMedicine = () => {
                 >
                   Next: Manufacturer & Supply
                 </button>
-              </div>
             </div>
+          </div>
 
             {/* Additional sections for supply, stock, medical info */}
             <div className={activeTab === 'supply' ? 'block' : 'hidden'}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                <div>
+              <div>
                   <label htmlFor="manufacturer" className="block text-sm font-medium text-gray-700 mb-1">
                     Manufacturer <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                <input
+                  type="text"
                     id="manufacturer"
-                    name="manufacturer"
-                    value={formData.manufacturer}
-                    onChange={handleInputChange}
+                  name="manufacturer"
+                  value={formData.manufacturer}
+                  onChange={handleInputChange}
                     className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                    required
-                  />
-                </div>
-                <div>
+                  required
+                />
+              </div>
+              <div>
                   <label htmlFor="supplier" className="block text-sm font-medium text-gray-700 mb-1">
                     Supplier
                   </label>
-                  <input
-                    type="text"
+                <input
+                  type="text"
                     id="supplier"
-                    name="supplier"
-                    value={formData.supplier}
-                    onChange={handleInputChange}
+                  name="supplier"
+                  value={formData.supplier}
+                  onChange={handleInputChange}
                     className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                  />
-                </div>
-                <div>
+                />
+              </div>
+              <div>
                   <label htmlFor="batchNumber" className="block text-sm font-medium text-gray-700 mb-1">
                     Batch Number <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="text"
+                <input
+                  type="text"
                     id="batchNumber"
-                    name="batchNumber"
-                    value={formData.batchNumber}
-                    onChange={handleInputChange}
+                  name="batchNumber"
+                  value={formData.batchNumber}
+                  onChange={handleInputChange}
                     className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                    required
-                  />
-                </div>
-                <div>
+                  required
+                />
+              </div>
+              <div>
                   <label htmlFor="expiryDate" className="block text-sm font-medium text-gray-700 mb-1">
                     Expiry Date <span className="text-red-500">*</span>
                   </label>
-                  <input
+                <input
                     type="date"
                     id="expiryDate"
                     name="expiryDate"
                     value={formData.expiryDate}
-                    onChange={handleInputChange}
+                  onChange={handleInputChange}
                     className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
                     required
-                  />
-                </div>
-              </div>
-              
+                />
+            </div>
+          </div>
+
               <div className="mt-8 flex justify-between">
                 <button
                   type="button"
@@ -356,35 +356,35 @@ const EditMedicine = () => {
                 >
                   Next: Stock & Price
                 </button>
-              </div>
             </div>
+          </div>
 
             <div className={activeTab === 'stock' ? 'block' : 'hidden'}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                <div>
+              <div>
                   <label htmlFor="stock" className="block text-sm font-medium text-gray-700 mb-1">
                     Stock Quantity <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="number"
+                <input
+                  type="number"
                     id="stock"
-                    name="stock"
-                    value={formData.stock}
-                    onChange={handleInputChange}
+                  name="stock"
+                  value={formData.stock}
+                  onChange={handleInputChange}
                     min="0"
                     className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                    required
-                  />
-                </div>
-                <div>
+                  required
+                />
+              </div>
+              <div>
                   <label htmlFor="unit" className="block text-sm font-medium text-gray-700 mb-1">
                     Unit
                   </label>
-                  <select
+                <select
                     id="unit"
-                    name="unit"
-                    value={formData.unit}
-                    onChange={handleInputChange}
+                  name="unit"
+                  value={formData.unit}
+                  onChange={handleInputChange}
                     className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
                   >
                     <option value="tablet">Tablet</option>
@@ -397,31 +397,31 @@ const EditMedicine = () => {
                     <option value="sachet">Sachet</option>
                     <option value="capsule">Capsule</option>
                     <option value="other">Other</option>
-                  </select>
-                </div>
-                <div>
+                </select>
+              </div>
+              <div>
                   <label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-1">
                     Selling Price <span className="text-red-500">*</span>
                   </label>
                   <div className="mt-1 relative rounded-md shadow-sm">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <span className="text-gray-500 sm:text-sm">$</span>
-                    </div>
-                    <input
-                      type="number"
+              </div>
+                <input
+                  type="number"
                       id="price"
-                      name="price"
-                      value={formData.price}
-                      onChange={handleInputChange}
+                  name="price"
+                  value={formData.price}
+                  onChange={handleInputChange}
                       className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
                       placeholder="0.00"
                       step="0.01"
                       min="0"
-                      required
-                    />
+                  required
+                />
                   </div>
-                </div>
-                <div>
+              </div>
+              <div>
                   <label htmlFor="costPrice" className="block text-sm font-medium text-gray-700 mb-1">
                     Cost Price <span className="text-red-500">*</span>
                   </label>
@@ -429,33 +429,33 @@ const EditMedicine = () => {
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <span className="text-gray-500 sm:text-sm">$</span>
                     </div>
-                    <input
-                      type="number"
+                <input
+                  type="number"
                       id="costPrice"
-                      name="costPrice"
-                      value={formData.costPrice}
-                      onChange={handleInputChange}
+                  name="costPrice"
+                  value={formData.costPrice}
+                  onChange={handleInputChange}
                       className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
                       placeholder="0.00"
                       step="0.01"
-                      min="0"
+                  min="0"
                       required
-                    />
+                />
                   </div>
-                </div>
-                <div>
+              </div>
+              <div>
                   <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">
                     Storage Location
                   </label>
-                  <input
+                <input
                     type="text"
                     id="location"
                     name="location"
                     value={formData.location}
-                    onChange={handleInputChange}
+                  onChange={handleInputChange}
                     className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                  />
-                </div>
+                />
+              </div>
               </div>
               
               <div className="mt-8 flex justify-between">
@@ -473,8 +473,8 @@ const EditMedicine = () => {
                 >
                   Next: Medical Information
                 </button>
-              </div>
             </div>
+          </div>
 
             <div className={activeTab === 'medical' ? 'block' : 'hidden'}>
               <div>
@@ -490,8 +490,8 @@ const EditMedicine = () => {
                   className="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
                   placeholder="e.g., 500mg, 10mg/ml"
                 />
-              </div>
-              
+          </div>
+
               <div className="mt-4">
                 <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
                   Description
@@ -507,11 +507,11 @@ const EditMedicine = () => {
               </div>
               
               <div className="mt-4 flex items-center">
-                <input
-                  id="prescriptionRequired"
+                  <input
+                    id="prescriptionRequired"
                   name="prescriptionRequired"
-                  type="checkbox"
-                  checked={formData.prescriptionRequired}
+                    type="checkbox"
+                    checked={formData.prescriptionRequired}
                   onChange={(e) => 
                     setFormData({
                       ...formData,
@@ -521,21 +521,21 @@ const EditMedicine = () => {
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                 />
                 <label htmlFor="prescriptionRequired" className="ml-2 block text-sm text-gray-900">
-                  Prescription Required
-                </label>
-              </div>
-              
+                    Prescription Required
+                  </label>
+          </div>
+
               <div className="mt-8 flex justify-between">
-                <button
-                  type="button"
+            <button
+              type="button"
                   onClick={() => setActiveTab('stock')}
                   className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
+            >
                   Back
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
                   className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
                 >
                   {loading ? (
@@ -552,10 +552,10 @@ const EditMedicine = () => {
                       Update Medicine
                     </>
                   )}
-                </button>
+            </button>
               </div>
-            </div>
-          </form>
+          </div>
+        </form>
         </>
       )}
     </div>

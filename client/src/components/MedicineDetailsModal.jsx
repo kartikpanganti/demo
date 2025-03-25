@@ -15,8 +15,11 @@ import {
   ClipboardDocumentListIcon,
   ClockIcon,
   CheckBadgeIcon,
-  ArrowDownTrayIcon
+  ArrowDownTrayIcon,
+  PrinterIcon,
+  QrCodeIcon
 } from '@heroicons/react/24/outline';
+import BarcodeGenerator from './BarcodeGenerator';
 
 const MedicineDetailsModal = ({ isOpen, onClose, medicineId, onAddToBill }) => {
   const [medicine, setMedicine] = useState(null);
@@ -26,6 +29,18 @@ const MedicineDetailsModal = ({ isOpen, onClose, medicineId, onAddToBill }) => {
   const [animateIn, setAnimateIn] = useState(false);
   const [addToCartQuantity, setAddToCartQuantity] = useState(1);
   const [isBarcodeVisible, setIsBarcodeVisible] = useState(false);
+  const [showBarcodeGenerator, setShowBarcodeGenerator] = useState(false);
+  
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    }
+    
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
   
   // Fetch medicine details when the modal opens
   useEffect(() => {
@@ -43,6 +58,7 @@ const MedicineDetailsModal = ({ isOpen, onClose, medicineId, onAddToBill }) => {
           setActiveTab('overview');
           setAddToCartQuantity(1);
           setIsBarcodeVisible(false);
+          setShowBarcodeGenerator(false);
         } catch (err) {
           setError(err.message || 'Failed to load medicine details');
           setLoading(false);
@@ -51,27 +67,62 @@ const MedicineDetailsModal = ({ isOpen, onClose, medicineId, onAddToBill }) => {
       
       fetchMedicineDetails();
       
-      // Trigger entrance animation
-      setTimeout(() => setAnimateIn(true), 50);
-    } else {
+      // Add animation delay
       setAnimateIn(false);
+      setTimeout(() => setAnimateIn(true), 50);
     }
   }, [isOpen, medicineId]);
-  
-  // Handle modal closing with animation
+
+  // Handle closing the modal with animation
   const handleClose = () => {
     setAnimateIn(false);
     setTimeout(() => {
       onClose();
-      // Don't reset medicine state immediately to avoid UI flicker
     }, 300);
   };
   
+  // Generate barcode 
+  const generateBarcode = async () => {
+    if (!medicine || !medicine._id) return;
+    
+    try {
+      setLoading(true);
+      const response = await axios.post(
+        `${API_BASE_URL}/api/medicines/${medicine._id}/generate-barcode`
+      );
+      
+      // Update medicine with the new barcode
+      setMedicine(response.data.medicine);
+      setLoading(false);
+      
+      // Show the barcode
+      setIsBarcodeVisible(true);
+    } catch (err) {
+      setError('Failed to generate barcode: ' + (err.response?.data?.message || err.message));
+      setLoading(false);
+    }
+  };
+  
+  // Open barcode generator 
+  const openBarcodeGenerator = () => {
+    if (!medicine || !medicine._id) return;
+    
+    // If no barcode exists, generate one first
+    if (!medicine.barcode) {
+      generateBarcode().then(() => {
+        setShowBarcodeGenerator(true);
+      });
+    } else {
+      setShowBarcodeGenerator(true);
+    }
+  };
+  
+  // Add to bill
   const handleAddToBill = () => {
-    if (medicine && onAddToBill && medicine.stock >= addToCartQuantity) {
+    if (onAddToBill && medicine && medicine.stock > 0) {
       onAddToBill(medicine, addToCartQuantity);
       
-      // Show confirmation animation
+      // Add a success animation to the Add to Bill button
       const button = document.getElementById('add-to-bill-button');
       if (button) {
         button.classList.add('animate-success');
@@ -82,107 +133,63 @@ const MedicineDetailsModal = ({ isOpen, onClose, medicineId, onAddToBill }) => {
     }
   };
   
-  // Add to Bill section visibility
-  const showAddToBill = !!onAddToBill;
-  
-  if (!isOpen) return null;
-  
-  // Calculate days until expiry
-  const calculateExpiryStatus = () => {
-    if (!medicine) return { days: 0, isExpired: false, isExpiringSoon: false };
+  const getExpiryStatus = (date) => {
+    if (!date) return { status: 'unknown', label: 'Unknown' };
     
-    const daysUntilExpiry = Math.ceil((new Date(medicine.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
-    return {
-      days: daysUntilExpiry,
-      isExpired: daysUntilExpiry <= 0,
-      isExpiringSoon: daysUntilExpiry > 0 && daysUntilExpiry <= 30
-    };
+    const expiryDate = new Date(date);
+    const today = new Date();
+    const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+    
+    if (daysUntilExpiry <= 0) {
+      return { status: 'expired', label: 'Expired' };
+    } else if (daysUntilExpiry <= 30) {
+      return { status: 'critical', label: `Expires in ${daysUntilExpiry} days` };
+    } else if (daysUntilExpiry <= 90) {
+      return { status: 'warning', label: `Expires in ${daysUntilExpiry} days` };
+    } else {
+      return { status: 'good', label: `Expires in ${daysUntilExpiry} days` };
+    }
   };
   
-  const { days, isExpired, isExpiringSoon } = calculateExpiryStatus();
+  // Calculate if we should show the add to bill option
+  const showAddToBill = !!onAddToBill && medicine && medicine.stock > 0;
+  
+  // If modal is not open, don't render
+  if (!isOpen) return null;
   
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-auto bg-black bg-opacity-50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
       <div 
-        className={`relative w-full max-w-4xl bg-white rounded-xl shadow-2xl transition-all duration-300 transform ${
-          animateIn ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
-        } max-h-[90vh] overflow-hidden flex flex-col`}
+        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+        onClick={handleClose}
+      ></div>
+      
+      {/* Modal Container */}
+      <div 
+        className={`relative bg-white rounded-lg max-w-3xl w-full mx-4 max-h-[90vh] flex flex-col shadow-xl transform transition-all ${
+          animateIn ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+        }`}
       >
-        {/* Header with background gradient */}
-        <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 p-6 border-b border-gray-200">
-          <div className="flex justify-between items-start">
-            <div className="pr-10">
-              {loading ? (
-                <div className="h-8 w-48 bg-gray-200 rounded animate-pulse"></div>
-              ) : medicine ? (
-                <h2 className="text-2xl font-bold text-gray-800 tracking-tight group">
-                  {medicine.name}
-                  {medicine.prescriptionRequired && (
-                    <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                      Rx
-                    </span>
-                  )}
-                </h2>
-              ) : (
-                <h2 className="text-2xl font-bold text-gray-800">Medicine Details</h2>
-              )}
-              
-              {medicine && (
-                <div className="mt-1 text-sm text-gray-600 flex items-center">
-                  <span>{medicine.manufacturer}</span>
-                  <span className="mx-2">•</span>
-                  <span>{medicine.category}</span>
-                </div>
-              )}
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={handleClose}
-                className="p-2 rounded-full text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-                title="Close"
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
-            </div>
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-6 py-4 text-white sticky top-0 z-10">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold truncate">
+              {medicine?.name || 'Medicine Details'}
+            </h2>
+            <button
+              onClick={handleClose}
+              className="rounded-full p-1 hover:bg-white hover:bg-opacity-20 transition-colors"
+            >
+              <XMarkIcon className="h-6 w-6" />
+            </button>
           </div>
-          
-          {/* Status Indicators */}
-          {medicine && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {medicine.stock <= medicine.minimumStock && (
-                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 border border-red-200">
-                  <ExclamationTriangleIcon className="h-4 w-4 mr-1" />
-                  Low Stock
-                </div>
-              )}
-              
-              {isExpired && (
-                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 border border-red-200">
-                  <ExclamationTriangleIcon className="h-4 w-4 mr-1" />
-                  Expired
-                </div>
-              )}
-              
-              {isExpiringSoon && !isExpired && (
-                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
-                  <ClockIcon className="h-4 w-4 mr-1" />
-                  Expires in {days} days
-                </div>
-              )}
-              
-              {medicine.controlledSubstance && (
-                <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800 border border-purple-200">
-                  <CheckBadgeIcon className="h-4 w-4 mr-1" />
-                  Controlled
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Tabs */}
-          <div className="mt-6 border-b border-gray-200">
-            <nav className="-mb-px flex space-x-6">
+        </div>
+        
+        {/* Tabs */}
+        <div className="border-b border-gray-200 bg-white sticky top-[60px] z-10">
+          <div className="px-6">
+            <nav className="flex space-x-6 overflow-x-auto">
               <button
                 onClick={() => setActiveTab('overview')}
                 className={`pb-3 px-1 ${activeTab === 'overview' ? 
@@ -227,8 +234,8 @@ const MedicineDetailsModal = ({ isOpen, onClose, medicineId, onAddToBill }) => {
           </div>
         </div>
         
-        {/* Content Area */}
-        <div className="p-6 overflow-y-auto">
+        {/* Content Area - Scrollable */}
+        <div className="p-6 overflow-y-auto flex-1">
           {/* Loading State */}
           {loading && (
             <div className="py-12 flex flex-col items-center justify-center space-y-4">
@@ -249,42 +256,10 @@ const MedicineDetailsModal = ({ isOpen, onClose, medicineId, onAddToBill }) => {
           
           {/* Medicine Content */}
           {medicine && !loading && (
-            <div className="animate-fadeIn">
+            <div>
               {/* Overview Tab */}
               {activeTab === 'overview' && (
                 <div className="space-y-6">
-                  {/* Quick Stats */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-5 rounded-xl shadow-sm border border-blue-200">
-                      <h3 className="text-sm font-medium text-blue-700 uppercase tracking-wider mb-2">Current Stock</h3>
-                      <p className={`text-3xl font-bold ${medicine.stock <= medicine.minimumStock ? 'text-red-600' : 'text-blue-900'}`}>
-                        {medicine.stock} <span className="text-lg font-normal">{medicine.unit}</span>
-                      </p>
-                      <p className="mt-1 text-xs text-blue-600">
-                        Minimum: {medicine.minimumStock} {medicine.unit}
-                      </p>
-                    </div>
-                    
-                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-5 rounded-xl shadow-sm border border-purple-200">
-                      <h3 className="text-sm font-medium text-purple-700 uppercase tracking-wider mb-2">Expiry Date</h3>
-                      <p className={`text-3xl font-bold ${isExpired ? 'text-red-600' : isExpiringSoon ? 'text-yellow-600' : 'text-purple-900'}`}>
-                        {new Date(medicine.expiryDate).toLocaleDateString()}
-                      </p>
-                      <p className="mt-1 text-xs text-purple-600">
-                        {isExpired ? 'Expired' : `${days} days remaining`}
-                      </p>
-                    </div>
-                    
-                    <div className="bg-gradient-to-br from-green-50 to-green-100 p-5 rounded-xl shadow-sm border border-green-200">
-                      <h3 className="text-sm font-medium text-green-700 uppercase tracking-wider mb-2">Price</h3>
-                      <p className="text-3xl font-bold text-green-900">${medicine.price.toFixed(2)}</p>
-                      <p className="mt-1 text-xs text-green-600">
-                        Batch: {medicine.batchNumber}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Basic Info Card */}
                   <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
                       <InformationCircleIcon className="h-5 w-5 mr-2 text-blue-500" />
@@ -292,10 +267,9 @@ const MedicineDetailsModal = ({ isOpen, onClose, medicineId, onAddToBill }) => {
                     </h3>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-                      <DetailItem label="Generic Name" value={medicine.genericName || 'N/A'} />
-                      <DetailItem label="Brand Name" value={medicine.name} />
+                      <DetailItem label="Name" value={medicine.name} />
                       <DetailItem label="Manufacturer" value={medicine.manufacturer} />
-                      <DetailItem label="Category" value={medicine.category} />
+                      <DetailItem label="Category" value={medicine.category || 'Uncategorized'} />
                       <DetailItem label="Dosage Form" value={medicine.dosageForm || 'N/A'} />
                       <DetailItem label="Strength" value={medicine.strength || 'N/A'} />
                       <DetailItem label="Location" value={medicine.location || 'N/A'} />
@@ -309,17 +283,37 @@ const MedicineDetailsModal = ({ isOpen, onClose, medicineId, onAddToBill }) => {
                   
                   {/* Barcode Section */}
                   <div className="text-center">
-                    <button 
-                      onClick={() => setIsBarcodeVisible(!isBarcodeVisible)}
-                      className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-                    >
-                      {isBarcodeVisible ? 'Hide Barcode' : 'Show Barcode'}
-                    </button>
+                    <div className="flex flex-wrap justify-center space-x-2 mb-4">
+                      <button 
+                        onClick={() => setIsBarcodeVisible(!isBarcodeVisible)}
+                        className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                      >
+                        <QrCodeIcon className="h-5 w-5 mr-2" />
+                        {isBarcodeVisible ? 'Hide Barcode' : 'Show Barcode'}
+                      </button>
+                      
+                      <button 
+                        onClick={openBarcodeGenerator}
+                        className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-md bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
+                      >
+                        <PrinterIcon className="h-5 w-5 mr-2" />
+                        Generate & Print Barcode
+                      </button>
+                    </div>
                     
-                    {isBarcodeVisible && (
+                    {!medicine.barcode && (
+                      <p className="text-sm text-gray-500 italic mb-3">
+                        No barcode available. Click "Generate & Print Barcode" to create one.
+                      </p>
+                    )}
+                    
+                    {isBarcodeVisible && medicine.barcode && (
                       <div className="mt-4 inline-block p-4 border rounded-lg bg-white shadow-sm animate-fadeIn">
-                        <Barcode value={medicine.barcode} />
-                        <p className="text-center mt-2 text-sm text-gray-600">{medicine.barcode}</p>
+                        <div className="flex flex-col items-center">
+                          <Barcode value={medicine.barcode} />
+                          <p className="text-center mt-2 text-sm text-gray-600 font-medium">{medicine.barcode}</p>
+                          <p className="text-center text-sm text-gray-700 font-semibold mt-1">{medicine.name}</p>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -348,12 +342,79 @@ const MedicineDetailsModal = ({ isOpen, onClose, medicineId, onAddToBill }) => {
                       <DetailItem label="Batch Number" value={medicine.batchNumber} />
                       <DetailItem 
                         label="Expiry Date" 
-                        value={new Date(medicine.expiryDate).toLocaleDateString()}
-                        highlight={isExpired || isExpiringSoon}
-                        highlightColor={isExpired ? "red" : "yellow"}
+                        value={medicine.expiryDate ? new Date(medicine.expiryDate).toLocaleDateString() : 'N/A'} 
+                        highlight={getExpiryStatus(medicine.expiryDate).status !== 'good'}
+                        highlightColor={getExpiryStatus(medicine.expiryDate).status === 'expired' ? 'red' : 'yellow'}
                       />
-                      <DetailItem label="Storage Conditions" value={medicine.storageConditions || 'Store in a cool, dry place'} />
-                      <DetailItem label="Storage Temperature" value={medicine.storageTemp || 'Room temperature'} />
+                      <DetailItem label="Unit Price" value={`$${medicine.price.toFixed(2)}`} />
+                      <DetailItem label="Supplier" value={medicine.supplier || 'N/A'} />
+                    </div>
+                  </div>
+                  
+                  {/* Stock Status Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className={`p-4 rounded-lg shadow-sm border flex items-center 
+                      ${medicine.stock <= 0 ? 
+                        'bg-red-50 border-red-200' : 
+                        medicine.stock <= medicine.minimumStock ? 
+                        'bg-yellow-50 border-yellow-200' : 
+                        'bg-green-50 border-green-200'}`}>
+                      <div className={`p-3 rounded-full mr-4
+                        ${medicine.stock <= 0 ? 
+                          'bg-red-100 text-red-500' : 
+                          medicine.stock <= medicine.minimumStock ? 
+                          'bg-yellow-100 text-yellow-500' : 
+                          'bg-green-100 text-green-500'}`}>
+                        <ArchiveBoxIcon className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-gray-700">Stock Status</h4>
+                        <p className={`
+                          ${medicine.stock <= 0 ? 
+                            'text-red-600' : 
+                            medicine.stock <= medicine.minimumStock ? 
+                            'text-yellow-600' : 
+                            'text-green-600'}`}>
+                          {medicine.stock <= 0 ? 
+                            'Out of Stock' : 
+                            medicine.stock <= medicine.minimumStock ? 
+                            'Low Stock' : 
+                            'In Stock'} ({medicine.stock} {medicine.unit})
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className={`p-4 rounded-lg shadow-sm border flex items-center 
+                      ${getExpiryStatus(medicine.expiryDate).status === 'expired' ? 
+                        'bg-red-50 border-red-200' : 
+                        getExpiryStatus(medicine.expiryDate).status === 'critical' ? 
+                        'bg-red-50 border-red-200' : 
+                        getExpiryStatus(medicine.expiryDate).status === 'warning' ? 
+                        'bg-yellow-50 border-yellow-200' : 
+                        'bg-green-50 border-green-200'}`}>
+                      <div className={`p-3 rounded-full mr-4
+                        ${getExpiryStatus(medicine.expiryDate).status === 'expired' ? 
+                          'bg-red-100 text-red-500' : 
+                          getExpiryStatus(medicine.expiryDate).status === 'critical' ? 
+                          'bg-red-100 text-red-500' : 
+                          getExpiryStatus(medicine.expiryDate).status === 'warning' ? 
+                          'bg-yellow-100 text-yellow-500' : 
+                          'bg-green-100 text-green-500'}`}>
+                        <ClockIcon className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-gray-700">Expiry Status</h4>
+                        <p className={`
+                          ${getExpiryStatus(medicine.expiryDate).status === 'expired' ? 
+                            'text-red-600' : 
+                            getExpiryStatus(medicine.expiryDate).status === 'critical' ? 
+                            'text-red-600' : 
+                            getExpiryStatus(medicine.expiryDate).status === 'warning' ? 
+                            'text-yellow-600' : 
+                            'text-green-600'}`}>
+                          {getExpiryStatus(medicine.expiryDate).label}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -361,7 +422,7 @@ const MedicineDetailsModal = ({ isOpen, onClose, medicineId, onAddToBill }) => {
               
               {/* Clinical Info Tab */}
               {activeTab === 'clinical' && (
-                <div className="space-y-6">
+                <div className="space-y-5">
                   <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
                       <BeakerIcon className="h-5 w-5 mr-2 text-blue-500" />
@@ -369,34 +430,36 @@ const MedicineDetailsModal = ({ isOpen, onClose, medicineId, onAddToBill }) => {
                     </h3>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-                      <DetailItem label="Therapeutic Category" value={medicine.therapeuticCategory || 'N/A'} />
-                      <DetailItem 
-                        label="Prescription Required" 
-                        value={medicine.prescriptionRequired ? 'Yes' : 'No'} 
-                        highlight={medicine.prescriptionRequired}
-                      />
+                      <DetailItem label="Generic Name" value={medicine.genericName || 'N/A'} />
+                      <DetailItem label="Mechanism of Action" value={medicine.mechanismOfAction || 'N/A'} />
                       <DetailItem 
                         label="Controlled Substance" 
                         value={medicine.controlledSubstance ? 'Yes' : 'No'} 
                         highlight={medicine.controlledSubstance}
+                        highlightColor="red"
                       />
-                      <DetailItem label="Dosage" value={medicine.dosage || 'As prescribed'} />
+                      <DetailItem label="FDA Schedule" value={medicine.fdaSchedule || 'N/A'} />
                     </div>
                     
-                    <div className="mt-6 space-y-4">
-                      <div>
-                        <h4 className="font-medium text-gray-800 mb-2">Side Effects</h4>
-                        <p className="text-gray-600 bg-gray-50 p-3 rounded border border-gray-200">
-                          {medicine.sideEffects || 'Refer to package insert for complete list of side effects.'}
-                        </p>
-                      </div>
-                      
-                      <div>
-                        <h4 className="font-medium text-gray-800 mb-2">Contraindications</h4>
-                        <p className="text-gray-600 bg-gray-50 p-3 rounded border border-gray-200">
-                          {medicine.contraindications || 'Refer to package insert for contraindications.'}
-                        </p>
-                      </div>
+                    <div className="mt-5">
+                      <h4 className="font-medium text-gray-700 mb-2">Indications</h4>
+                      <p className="text-gray-700 whitespace-pre-line">
+                        {medicine.indications || 'No indication information available'}
+                      </p>
+                    </div>
+                    
+                    <div className="mt-5">
+                      <h4 className="font-medium text-gray-700 mb-2">Contraindications</h4>
+                      <p className="text-gray-700 whitespace-pre-line">
+                        {medicine.contraindications || 'No contraindication information available'}
+                      </p>
+                    </div>
+                    
+                    <div className="mt-5">
+                      <h4 className="font-medium text-gray-700 mb-2">Side Effects</h4>
+                      <p className="text-gray-700 whitespace-pre-line">
+                        {medicine.sideEffects || 'No side effect information available'}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -404,34 +467,19 @@ const MedicineDetailsModal = ({ isOpen, onClose, medicineId, onAddToBill }) => {
               
               {/* Notes Tab */}
               {activeTab === 'notes' && (
-                <div className="space-y-6">
+                <div className="space-y-5">
                   <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
                       <ClipboardDocumentListIcon className="h-5 w-5 mr-2 text-blue-500" />
-                      Additional Information
+                      Notes & Special Instructions
                     </h3>
                     
-                    <div className="space-y-4">
-                      <div>
-                        <h4 className="font-medium text-gray-800 mb-2">Description</h4>
-                        <p className="text-gray-600 bg-gray-50 p-3 rounded border border-gray-200">
-                          {medicine.description || 'No description available.'}
-                        </p>
-                      </div>
-                      
-                      <div>
-                        <h4 className="font-medium text-gray-800 mb-2">Usage Instructions</h4>
-                        <p className="text-gray-600 bg-gray-50 p-3 rounded border border-gray-200">
-                          {medicine.usageInstructions || 'Follow prescription instructions.'}
-                        </p>
-                      </div>
-                      
-                      <div>
-                        <h4 className="font-medium text-gray-800 mb-2">Notes</h4>
-                        <p className="text-gray-600 bg-gray-50 p-3 rounded border border-gray-200">
-                          {medicine.notes || 'No additional notes.'}
-                        </p>
-                      </div>
+                    <div className="p-4 bg-gray-50 rounded-lg">
+                      {medicine.notes ? (
+                        <p className="whitespace-pre-line text-gray-700">{medicine.notes}</p>
+                      ) : (
+                        <p className="text-gray-500 italic">No notes available for this medicine</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -440,29 +488,31 @@ const MedicineDetailsModal = ({ isOpen, onClose, medicineId, onAddToBill }) => {
           )}
         </div>
         
-        {/* Footer Actions */}
+        {/* Footer */}
         {medicine && !loading && (
-          <div className="border-t border-gray-200 p-4 bg-gray-50 flex flex-wrap justify-between items-center gap-4">
-            <div className="flex items-center">
-              <span className={`text-sm font-medium ${
-                medicine.stock <= 0 ? 'text-red-600' : 
-                medicine.stock <= medicine.minimumStock ? 'text-yellow-600' : 
-                'text-green-600'
-              }`}>
-                {medicine.stock <= 0 ? 'Out of Stock' : 
-                 medicine.stock <= medicine.minimumStock ? 'Low Stock' : 
-                 'In Stock'}
-              </span>
-              <span className="mx-2 text-gray-300">|</span>
-              <span className="text-sm text-gray-600">
-                {medicine.stock} {medicine.unit} available
-              </span>
-            </div>
-            
-            {/* Add to Bill options */}
-            {showAddToBill && (
-              <div className="mt-4 border-t border-gray-200 pt-4">
-                <div className="flex items-center">
+          <div className="border-t border-gray-200 p-4 bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
+                  medicine.stock <= 0 ? 
+                  'bg-red-100 text-red-800' : 
+                  medicine.stock <= medicine.minimumStock ? 
+                  'bg-yellow-100 text-yellow-800' : 
+                  'bg-green-100 text-green-800'
+                }`}>
+                  {medicine.stock <= 0 ? 'Out of Stock' : 
+                   medicine.stock <= medicine.minimumStock ? 'Low Stock' : 
+                   'In Stock'}
+                </span>
+                <span className="mx-2 text-gray-300">|</span>
+                <span className="text-sm text-gray-600">
+                  {medicine.stock} {medicine.unit} available
+                </span>
+              </div>
+              
+              {/* Add to Bill options */}
+              {showAddToBill && (
+                <div className="flex items-center flex-wrap">
                   <label htmlFor="quantity" className="block text-sm font-medium text-gray-700 mr-4">
                     Quantity:
                   </label>
@@ -502,19 +552,29 @@ const MedicineDetailsModal = ({ isOpen, onClose, medicineId, onAddToBill }) => {
                     Add to Bill
                   </button>
                 </div>
-              </div>
-            )}
-            
-            <Link 
-              to={`/edit/${medicine._id}`}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-sm"
-            >
-              <PencilIcon className="h-5 w-5 mr-2 text-gray-500" />
-              Edit Details
-            </Link>
+              )}
+              
+              {!showAddToBill && (
+                <Link 
+                  to={`/edit/${medicine._id}`}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-sm"
+                >
+                  <PencilIcon className="h-5 w-5 mr-2 text-gray-500" />
+                  Edit Details
+                </Link>
+              )}
+            </div>
           </div>
         )}
       </div>
+      
+      {/* Barcode Generator Modal */}
+      {showBarcodeGenerator && medicine && (
+        <BarcodeGenerator 
+          medicine={medicine} 
+          onClose={() => setShowBarcodeGenerator(false)} 
+        />
+      )}
     </div>
   );
 };
@@ -538,4 +598,4 @@ const DetailItem = ({ label, value, highlight = false, highlightColor = "blue" }
   );
 };
 
-export default MedicineDetailsModal; 
+export default MedicineDetailsModal;

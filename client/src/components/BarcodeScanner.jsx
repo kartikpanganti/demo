@@ -8,7 +8,8 @@ import {
   ArrowPathIcon,
   CheckCircleIcon,
   ExclamationCircleIcon,
-  ShoppingCartIcon
+  ShoppingCartIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 
 const BarcodeScanner = ({ onClose, onScanComplete, isBilling = false }) => {
@@ -21,6 +22,9 @@ const BarcodeScanner = ({ onClose, onScanComplete, isBilling = false }) => {
   const [cameras, setCameras] = useState([]);
   const [continuousMode, setContinuousMode] = useState(isBilling);
   const [successCount, setSuccessCount] = useState(0);
+  const [lastScanned, setLastScanned] = useState(null);
+  const [expiredMedicine, setExpiredMedicine] = useState(null);
+  const [isClosing, setIsClosing] = useState(false);
   const scannerRef = useRef(null);
   const scannerContainerId = "qr-reader-container";
   
@@ -49,20 +53,32 @@ const BarcodeScanner = ({ onClose, onScanComplete, isBilling = false }) => {
     };
   }, []);
   
-  // Start scanner when cameraId is selected
+  // Start scanner whenever cameraId changes or scanning state changes
   useEffect(() => {
-    if (cameraId) {
+    if (cameraId && !scanning) {
       startScanner();
     }
-    
-    return () => {
-      stopScanner();
-    };
   }, [cameraId]);
+  
+  // Auto-add medicine to cart when details are available in continuous mode
+  useEffect(() => {
+    if (continuousMode && medicineDetails && medicineDetails.stock > 0 && medicineDetails._id !== lastScanned) {
+      // Check if this is an expired medicine that needs confirmation
+      if (expiredMedicine && expiredMedicine._id === medicineDetails._id) {
+        // Don't auto-add expired medicines - they need manual confirmation
+        return;
+      }
+      
+      // Only add to cart if this is a new scan (prevents duplicates)
+      handleAddToCart();
+    }
+  }, [medicineDetails, continuousMode]);
   
   const startScanner = async () => {
     try {
-      stopScanner(); // Stop any existing scanner first
+      if (scannerRef.current) {
+        await stopScanner(); // Stop any existing scanner
+      }
       
       const html5QrCode = new Html5Qrcode(scannerContainerId);
       scannerRef.current = html5QrCode;
@@ -162,139 +178,66 @@ const BarcodeScanner = ({ onClose, onScanComplete, isBilling = false }) => {
       
       if (daysUntilExpiry <= 0) {
         setError('WARNING: This medicine has expired!');
-        // Resume scanning in continuous mode even on error
-        if (continuousMode && scannerRef.current) {
-          setTimeout(() => scannerRef.current.resume(), 2000);
-        }
-        return;
+        setExpiredMedicine(medicine);
+        return medicine;
       } else if (daysUntilExpiry <= 30) {
-        setError(`Warning: Medicine expires in ${daysUntilExpiry} days`);
+        setError(`WARNING: This medicine expires in ${daysUntilExpiry} days!`);
       }
       
+      // Check stock
       if (medicine.stock <= 0) {
-        setError(`This medicine is out of stock!`);
-        // Resume scanning in continuous mode even on error
+        setError('This medicine is out of stock!');
+        // Resume scanning in continuous mode even on warning
         if (continuousMode && scannerRef.current) {
           setTimeout(() => scannerRef.current.resume(), 2000);
         }
         return;
       }
       
-      // For billing mode handling
-      if (isBilling) {
-        if (continuousMode) {
-          // For continuous mode, auto-add to cart after a short delay
-          setTimeout(() => {
-            // Only auto-add if we haven't encountered any errors
-            if (!error) {
-              handleAddToCart(); // This will call onScanComplete with the continuousMode flag
-            } else {
-              // If there's an error but we're in continuous mode, resume scanning
-              if (scannerRef.current) {
-                scannerRef.current.resume();
-              }
-            }
-          }, 1000);
-        } else {
-          // For non-continuous mode, close after a delay
-          setTimeout(() => {
-            if (onScanComplete) {
-              onScanComplete(medicine, false); // Not continuous - normal close behavior
-            }
-          }, 1000);
-        }
-      } else if (onScanComplete && !isBilling) {
-        onScanComplete(medicine, false); // Not continuous - normal close behavior
-      }
+      return medicine;
     } catch (err) {
-      // Resume scanning in continuous mode after error
-      if (continuousMode && scannerRef.current) {
-        setTimeout(() => scannerRef.current.resume(), 2000);
-      }
-      throw new Error(err.response?.data?.message || err.message);
+      console.error('Error processing QR code:', err);
+      throw err;
     }
   };
 
   // Handle barcode data
   const handleBarcodeData = async (barcode) => {
     try {
-      if (!barcode) {
-        throw new Error('Invalid barcode');
-      }
-
-      try {
-        const response = await axios.get(`${API_BASE_URL}/api/medicines/barcode/${barcode}`);
+      // Search medicine by barcode
+      const response = await axios.get(`${API_BASE_URL}/api/medicines/barcode/${barcode}`);
+      
+      if (response.data) {
         const medicine = response.data;
-        
         setMedicineDetails(medicine);
         
-        // Check expiry for billing
-        if (isBilling) {
-          const expiryDate = new Date(medicine.expiryDate);
-          const today = new Date();
-          const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-          
-          if (daysUntilExpiry <= 0) {
-            setError('WARNING: This medicine has expired! Cannot add to cart.');
-            // Resume scanning in continuous mode even on error
-            if (continuousMode && scannerRef.current) {
-              setTimeout(() => scannerRef.current.resume(), 2000);
-            }
-            return;
-          } else if (daysUntilExpiry <= 30) {
-            setError(`Warning: Medicine expires in ${daysUntilExpiry} days`);
-          }
-          
-          if (medicine.stock <= 0) {
-            setError(`This medicine is out of stock!`);
-            // Resume scanning in continuous mode even on error
-            if (continuousMode && scannerRef.current) {
-              setTimeout(() => scannerRef.current.resume(), 2000);
-            }
-            return;
-          }
-          
-          if (continuousMode) {
-            // For continuous mode, auto-add to cart after a short delay
-            setTimeout(() => {
-              // Only auto-add if we haven't encountered any errors
-              if (!error) {
-                handleAddToCart(); // This will call onScanComplete with the continuousMode flag
-              } else {
-                // If there's an error but we're in continuous mode, resume scanning
-                if (scannerRef.current) {
-                  scannerRef.current.resume();
-                }
-              }
-            }, 1000);
-          } else {
-            // For non-continuous mode, close after a delay
-            setTimeout(() => {
-              if (onScanComplete) {
-                onScanComplete(medicine, false); // Not continuous - normal close behavior
-              }
-            }, 1000);
-          }
-        } else if (onScanComplete && !isBilling) {
-          onScanComplete(medicine, false); // Not continuous - normal close behavior
-        }
-      } catch (apiError) {
-        console.error('API Error:', apiError);
-        // Check if it's a 404 (not found) or a server error
-        if (apiError.response) {
-          if (apiError.response.status === 404) {
-            setError(`Product with barcode ${barcode} not found in the system`);
-          } else {
-            setError(`Server error: ${apiError.response.data.message || 'Unknown error'}`);
-          }
-        } else if (apiError.request) {
-          // Request was made but no response received (network issue)
-          setError('Network error. Please check your connection');
-        } else {
-          setError('Error fetching medicine: ' + apiError.message);
+        // Check expiry
+        const expiryDate = new Date(medicine.expiryDate);
+        const today = new Date();
+        const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+        
+        if (daysUntilExpiry <= 0) {
+          setError('WARNING: This medicine has expired!');
+          setExpiredMedicine(medicine);
+          return medicine;
+        } else if (daysUntilExpiry <= 30) {
+          setError(`WARNING: This medicine expires in ${daysUntilExpiry} days!`);
         }
         
-        // Resume scanning in continuous mode after error
+        // Check stock
+        if (medicine.stock <= 0) {
+          setError('This medicine is out of stock!');
+          // Resume scanning in continuous mode even on warning
+          if (continuousMode && scannerRef.current) {
+            setTimeout(() => scannerRef.current.resume(), 2000);
+          }
+          return;
+        }
+        
+        return medicine;
+      } else {
+        setError('No medicine found with this barcode');
+        // Resume scanning in continuous mode even on error
         if (continuousMode && scannerRef.current) {
           setTimeout(() => scannerRef.current.resume(), 2000);
         }
@@ -318,6 +261,10 @@ const BarcodeScanner = ({ onClose, onScanComplete, isBilling = false }) => {
 
   const handleClose = async () => {
     try {
+      // Prevent multiple clicks
+      if (isClosing) return;
+      
+      setIsClosing(true);
       await stopScanner();
       onClose();
     } catch (err) {
@@ -326,26 +273,46 @@ const BarcodeScanner = ({ onClose, onScanComplete, isBilling = false }) => {
     }
   };
 
-  // Function to handle adding to cart directly from the scanner
-  const handleAddToCart = () => {
+  // Function to handle adding to cart
+  const handleAddToCart = (forceAdd = false) => {
+    // If it's an expired medicine and not being force-added, don't proceed
+    if (expiredMedicine && expiredMedicine._id === medicineDetails?._id && !forceAdd) {
+      return;
+    }
+    
     if (medicineDetails && medicineDetails.stock > 0) {
       if (onScanComplete) {
+        // Set as last scanned to prevent duplicate adds
+        setLastScanned(medicineDetails._id);
+        
+        // If adding expired medicine, clear expiredMedicine state
+        if (expiredMedicine && expiredMedicine._id === medicineDetails._id && forceAdd) {
+          setExpiredMedicine(null);
+        }
+        
         // Pass the continuousMode flag to prevent premature scanner closing
         onScanComplete(medicineDetails, continuousMode);
         setSuccessCount(prevCount => prevCount + 1);
+        
+        // Show brief success message
+        const originalError = error;
+        setError(null);
+        setError(`Added ${medicineDetails.name} to cart`);
         
         // Reset state and resume scanning if in continuous mode
         if (continuousMode) {
           console.log("Attempting to resume scanning after adding item to cart");
           setMedicineDetails(null);
           setScanResult(null);
-          setError(null);
           
           // Resume scanning
           if (scannerRef.current) {
             try {
               // Force a small delay before resuming to ensure UI updates
               setTimeout(() => {
+                // Clear the temporary success message
+                setError(originalError);
+                
                 if (scannerRef.current) {
                   scannerRef.current.resume();
                   console.log("Scanner resumed successfully");
@@ -353,7 +320,7 @@ const BarcodeScanner = ({ onClose, onScanComplete, isBilling = false }) => {
                   console.error("Scanner reference lost before resuming");
                   startScanner(); // Try restarting scanner if reference is lost
                 }
-              }, 500);
+              }, 1000);
             } catch (err) {
               console.error("Error resuming scanner:", err);
               // If resume fails, try to restart the scanner
@@ -371,6 +338,23 @@ const BarcodeScanner = ({ onClose, onScanComplete, isBilling = false }) => {
     }
   };
   
+  // Handle skip expired medicine
+  const handleSkipExpired = () => {
+    setExpiredMedicine(null);
+    setMedicineDetails(null);
+    setError(null);
+    
+    // Resume scanning
+    if (scannerRef.current && continuousMode) {
+      try {
+        scannerRef.current.resume();
+      } catch (err) {
+        console.error("Error resuming scanner:", err);
+        startScanner();
+      }
+    }
+  };
+  
   // Handle camera change
   const handleCameraChange = (e) => {
     setCameraId(e.target.value);
@@ -382,14 +366,14 @@ const BarcodeScanner = ({ onClose, onScanComplete, isBilling = false }) => {
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-gray-800">
-              Scan Barcode
+              {continuousMode ? 'Auto-Scan Mode' : 'Scan Barcode'}
               {continuousMode && successCount > 0 && ` (${successCount} added)`}
             </h2>
             
             {/* Mode toggle for billing */}
             {isBilling && (
               <div className="flex items-center">
-                <span className="text-sm mr-2 text-gray-600">Continuous Scan:</span>
+                <span className="text-sm mr-2 text-gray-600">Auto-Add Items:</span>
                 <button 
                   onClick={() => setContinuousMode(!continuousMode)} 
                   className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors focus:outline-none ${continuousMode ? 'bg-blue-600' : 'bg-gray-300'}`}
@@ -401,24 +385,6 @@ const BarcodeScanner = ({ onClose, onScanComplete, isBilling = false }) => {
               </div>
             )}
           </div>
-
-          {/* Camera selector */}
-          {cameras.length > 1 && (
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Select Camera</label>
-              <select
-                value={cameraId || ''}
-                onChange={(e) => setCameraId(e.target.value)}
-                className="w-full p-2 border rounded"
-              >
-                {cameras.map((camera) => (
-                  <option key={camera.id} value={camera.id}>
-                    {camera.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
           
           {/* Scanner */}
           <div 
@@ -441,18 +407,53 @@ const BarcodeScanner = ({ onClose, onScanComplete, isBilling = false }) => {
             </div>
           )}
 
-          {/* Error Message */}
-          {error && (
-            <div className="bg-red-50 border-l-4 border-red-400 p-4">
-              <div className="flex items-center">
-                <ExclamationCircleIcon className="h-5 w-5 text-red-400 mr-2" />
-                <p className="text-red-700">{error}</p>
+          {/* Expired Medicine Confirmation */}
+          {expiredMedicine && (
+            <div className="bg-amber-50 border-2 border-amber-400 rounded-lg p-4 mb-4">
+              <div className="flex items-start">
+                <ExclamationTriangleIcon className="h-6 w-6 text-amber-500 mr-2 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <h3 className="font-medium text-amber-800">
+                    Expired Medicine Detected
+                  </h3>
+                  <p className="text-sm text-amber-700 mb-2">
+                    {expiredMedicine.name} has expired. Do you still want to add it to the cart?
+                  </p>
+                  <div className="flex space-x-2 mt-3">
+                    <button
+                      onClick={() => handleAddToCart(true)}
+                      className="px-3 py-1.5 bg-amber-100 text-amber-800 border border-amber-300 rounded-md hover:bg-amber-200 flex-1 text-sm font-medium"
+                    >
+                      Add Anyway
+                    </button>
+                    <button
+                      onClick={handleSkipExpired}
+                      className="px-3 py-1.5 bg-gray-100 text-gray-800 border border-gray-300 rounded-md hover:bg-gray-200 flex-1 text-sm font-medium"
+                    >
+                      Skip
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Scan Result */}
-          {medicineDetails && !loading && (
+          {/* Success/Error Message */}
+          {error && !expiredMedicine && (
+            <div className={`border-l-4 p-4 ${error.includes('Added') ? 'bg-green-50 border-green-400' : 'bg-red-50 border-red-400'}`}>
+              <div className="flex items-center">
+                {error.includes('Added') ? (
+                  <CheckCircleIcon className="h-5 w-5 text-green-400 mr-2" />
+                ) : (
+                  <ExclamationCircleIcon className="h-5 w-5 text-red-400 mr-2" />
+                )}
+                <p className={error.includes('Added') ? 'text-green-700' : 'text-red-700'}>{error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Scan Result - only show if not in continuous mode or the item can't be auto-added */}
+          {medicineDetails && !loading && !expiredMedicine && (!continuousMode || medicineDetails.stock <= 0) && (
             <div className="bg-green-50 border rounded-lg p-4">
               <div className="flex items-start">
                 <CheckCircleIcon className="h-5 w-5 text-green-400 mr-2 mt-0.5" />
@@ -479,18 +480,26 @@ const BarcodeScanner = ({ onClose, onScanComplete, isBilling = false }) => {
                     </div>
                   </dl>
                   
-                  {/* Add to Cart Button for Billing */}
-                  {isBilling && medicineDetails.stock > 0 && (
+                  {/* Add to Cart Button for non-continuous mode or out of stock items */}
+                  {isBilling && medicineDetails.stock > 0 && !continuousMode && (
                     <button
-                      onClick={handleAddToCart}
+                      onClick={() => handleAddToCart()}
                       className="mt-3 w-full bg-blue-600 text-white rounded-md hover:bg-blue-700 py-2 px-4 flex items-center justify-center"
                     >
                       <ShoppingCartIcon className="h-5 w-5 mr-2" />
-                      Add to Cart {continuousMode && "& Continue Scanning"}
+                      Add to Cart
                     </button>
                   )}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Instructions for continuous mode */}
+          {continuousMode && successCount === 0 && !medicineDetails && !expiredMedicine && !loading && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center mb-4">
+              <p className="text-blue-700">Scan items to automatically add them to the cart</p>
+              <p className="text-blue-500 text-sm mt-1">When finished, click the "Finish" button below</p>
             </div>
           )}
 
@@ -499,9 +508,10 @@ const BarcodeScanner = ({ onClose, onScanComplete, isBilling = false }) => {
             {/* Close/Cancel Button */}
             <button
               onClick={handleClose}
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              disabled={isClosing}
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {continuousMode ? 'Stop Scanning' : 'Close'}
+              {isClosing ? 'Closing...' : (continuousMode ? 'Cancel' : 'Close')}
             </button>
             
             {/* Finish/View Details Button */}
@@ -511,18 +521,20 @@ const BarcodeScanner = ({ onClose, onScanComplete, isBilling = false }) => {
                   if (onScanComplete) onScanComplete(medicineDetails);
                   handleClose();
                 }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                disabled={isClosing}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 View Details
               </button>
             ) : (
-              continuousMode && successCount > 0 && (
+              continuousMode && (
                 <button
                   onClick={handleClose}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center"
+                  disabled={successCount === 0 || isClosing}
+                  className={`px-4 py-2 ${successCount > 0 ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400'} text-white rounded-md flex items-center disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   <ShoppingCartIcon className="h-5 w-5 mr-2" />
-                  Finish ({successCount} items)
+                  {isClosing ? 'Finishing...' : `Finish ${successCount > 0 ? `(${successCount} items)` : ''}`}
                 </button>
               )
             )}

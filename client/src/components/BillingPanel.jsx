@@ -118,16 +118,42 @@ function BillingPanel({ isOpen, onClose }) {
     setSearchResults([]);
   };
 
+  // Show scanner modal
+  const openScanner = () => {
+    // Prevent background scrolling when scanner is open
+    document.body.style.overflow = 'hidden';
+    setShowScanner(true);
+  };
+  
+  // Handle when scanner is closed
+  const closeScanner = () => {
+    // Small delay to ensure proper cleanup
+    setTimeout(() => {
+      setShowScanner(false);
+      // Restore scrolling when scanner is closed
+      document.body.style.overflow = '';
+    }, 100);
+  };
+
   const handleScanComplete = (scannedMedicine, isContinuousScan = false) => {
     // Only close the scanner if this is NOT part of continuous scanning
     if (!isContinuousScan) {
-    setShowScanner(false);
+      closeScanner();
     }
     
     if (scannedMedicine && scannedMedicine._id) {
       // If the medicine has stock, add it to the cart
       if (scannedMedicine.stock > 0) {
         addToCart(scannedMedicine);
+        // Show a brief success message
+        const tempSuccessMessage = `Added ${scannedMedicine.name} to cart`;
+        setSuccessMessage(tempSuccessMessage);
+        // Clear the message after 2 seconds
+        setTimeout(() => {
+          if (successMessage === tempSuccessMessage) {
+            setSuccessMessage('');
+          }
+        }, 2000);
       } else {
         setError(`${scannedMedicine.name} is out of stock.`);
       }
@@ -352,7 +378,7 @@ function BillingPanel({ isOpen, onClose }) {
     <div className={`fixed inset-0 z-50 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
       <div className="absolute inset-0 bg-black bg-opacity-50"></div>
       
-      <div className={`absolute inset-y-0 right-0 max-w-2xl w-full bg-white shadow-xl transform transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`absolute inset-y-0 right-0 max-w-2xl w-full bg-white shadow-xl transform transition-transform duration-300 flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="sticky top-0 bg-white border-b z-10">
           <div className="flex justify-between items-center p-4">
             <h2 className="text-2xl font-bold text-primary flex items-center">
@@ -392,7 +418,7 @@ function BillingPanel({ isOpen, onClose }) {
                   )}
                 </div>
                 <button 
-                  onClick={() => setShowScanner(true)}
+                  onClick={openScanner}
                   className="bg-blue-600 text-white px-4 rounded-r-lg hover:bg-blue-700 flex items-center"
                 >
                   <QrCodeIcon className="h-6 w-6" />
@@ -401,7 +427,7 @@ function BillingPanel({ isOpen, onClose }) {
               
               {/* Prominent Scan Button */}
               <button
-                onClick={() => setShowScanner(true)}
+                onClick={openScanner}
                 className="w-full mt-2 bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded-lg flex items-center justify-center transition-all duration-200 transform hover:scale-105"
               >
                 <QrCodeIcon className="h-6 w-6 mr-2 animate-pulse" />
@@ -450,259 +476,261 @@ function BillingPanel({ isOpen, onClose }) {
           )}
         </div>
         
-        {/* Cart */}
-        <div className="p-4">
-          <div className="bg-gray-50 rounded-lg p-4 mb-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-lg flex items-center">
-                <ShoppingCartIcon className="h-5 w-5 mr-1 text-primary" />
-                Cart Items
-              </h3>
-              <span className="text-sm text-gray-500">{cart.length} items</span>
+        {/* Cart - make this div scrollable */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-4">
+            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-lg flex items-center">
+                  <ShoppingCartIcon className="h-5 w-5 mr-1 text-primary" />
+                  Cart Items
+                </h3>
+                <span className="text-sm text-gray-500">{cart.length} items</span>
+              </div>
+              
+              {cart.length === 0 ? (
+                <div className="text-center py-6 text-gray-500">
+                  Cart is empty. Search or scan medicines to get started.
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {cart.map(item => (
+                    <div key={item._id} className="py-3 flex justify-between items-center">
+                      <div className="flex-1">
+                        <div className="font-medium">{item.name}</div>
+                        <div className="text-sm text-gray-600">${item.price.toFixed(2)} each</div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        {billingStep === 'editing' ? (
+                          <>
+                            <button 
+                              onClick={() => updateCartItemQuantity(item._id, item.quantity - 1)}
+                              className="p-1 rounded-full hover:bg-gray-200"
+                            >
+                              <MinusIcon className="h-4 w-4 text-gray-600" />
+                            </button>
+                            <span className="w-8 text-center">{item.quantity}</span>
+                            <button 
+                              onClick={() => updateCartItemQuantity(item._id, item.quantity + 1)}
+                              className="p-1 rounded-full hover:bg-gray-200"
+                              disabled={item.quantity >= item.stock}
+                            >
+                              <PlusIcon className="h-4 w-4 text-gray-600" />
+                            </button>
+                            <div className="w-20 text-right font-bold">
+                              ${item.total.toFixed(2)}
+                            </div>
+                            <button 
+                              onClick={() => removeFromCart(item._id)}
+                              className="p-1 rounded-full hover:bg-gray-200 text-red-500"
+                            >
+                              <XMarkIcon className="h-4 w-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="w-8 text-center">{item.quantity} x</span>
+                            <div className="w-20 text-right font-bold">
+                              ${item.total.toFixed(2)}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             
-            {cart.length === 0 ? (
-              <div className="text-center py-6 text-gray-500">
-                Cart is empty. Search or scan medicines to get started.
-              </div>
-            ) : (
-              <div className="divide-y">
-                {cart.map(item => (
-                  <div key={item._id} className="py-3 flex justify-between items-center">
-                    <div className="flex-1">
-                      <div className="font-medium">{item.name}</div>
-                      <div className="text-sm text-gray-600">${item.price.toFixed(2)} each</div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      {billingStep === 'editing' ? (
-                        <>
-                          <button 
-                            onClick={() => updateCartItemQuantity(item._id, item.quantity - 1)}
-                            className="p-1 rounded-full hover:bg-gray-200"
-                          >
-                            <MinusIcon className="h-4 w-4 text-gray-600" />
-                          </button>
-                          <span className="w-8 text-center">{item.quantity}</span>
-                          <button 
-                            onClick={() => updateCartItemQuantity(item._id, item.quantity + 1)}
-                            className="p-1 rounded-full hover:bg-gray-200"
-                            disabled={item.quantity >= item.stock}
-                          >
-                            <PlusIcon className="h-4 w-4 text-gray-600" />
-                          </button>
-                          <div className="w-20 text-right font-bold">
-                            ${item.total.toFixed(2)}
-                          </div>
-                          <button 
-                            onClick={() => removeFromCart(item._id)}
-                            className="p-1 rounded-full hover:bg-gray-200 text-red-500"
-                          >
-                            <XMarkIcon className="h-4 w-4" />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <span className="w-8 text-center">{item.quantity} x</span>
-                          <div className="w-20 text-right font-bold">
-                            ${item.total.toFixed(2)}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          {/* Customer Details */}
-          <div className="bg-gray-50 rounded-lg p-4 mb-4">
-            <h3 className="font-bold text-lg mb-3">Customer Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  value={customer.name}
-                  onChange={(e) => setCustomer({...customer, name: e.target.value})}
-                  className="w-full p-2 border rounded"
-                  placeholder="Customer name"
-                  disabled={billingStep !== 'editing'}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contact</label>
-                <input
-                  type="text"
-                  value={customer.contact}
-                  onChange={(e) => setCustomer({...customer, contact: e.target.value})}
-                  className="w-full p-2 border rounded"
-                  placeholder="Phone number (optional)"
-                  disabled={billingStep !== 'editing'}
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={customer.email}
-                  onChange={(e) => setCustomer({...customer, email: e.target.value})}
-                  className="w-full p-2 border rounded"
-                  placeholder="Email address (optional)"
-                  disabled={billingStep !== 'editing'}
-                />
+            {/* Customer Details */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-lg mb-3">Customer Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Name <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={customer.name}
+                    onChange={(e) => setCustomer({...customer, name: e.target.value})}
+                    className="w-full p-2 border rounded"
+                    placeholder="Customer name"
+                    disabled={billingStep !== 'editing'}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Contact</label>
+                  <input
+                    type="text"
+                    value={customer.contact}
+                    onChange={(e) => setCustomer({...customer, contact: e.target.value})}
+                    className="w-full p-2 border rounded"
+                    placeholder="Phone number (optional)"
+                    disabled={billingStep !== 'editing'}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={customer.email}
+                    onChange={(e) => setCustomer({...customer, email: e.target.value})}
+                    className="w-full p-2 border rounded"
+                    placeholder="Email address (optional)"
+                    disabled={billingStep !== 'editing'}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-          
-          {/* Payment Details */}
-          <div className="bg-gray-50 rounded-lg p-4 mb-4">
-            <h3 className="font-bold text-lg mb-3">Payment Details</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            
+            {/* Payment Details */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-lg mb-3">Payment Details</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="w-full p-2 border rounded"
+                    disabled={billingStep !== 'editing' && billingStep !== 'applied'}
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="Card">Card</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Discount ($)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={discount}
+                    onChange={(e) => setDiscount(Number(e.target.value))}
+                    className="w-full p-2 border rounded"
+                    disabled={billingStep !== 'editing'}
+                  />
+                </div>
+              </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
+                <label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
                   className="w-full p-2 border rounded"
-                  disabled={billingStep !== 'editing' && billingStep !== 'applied'}
+                  rows="2"
+                  placeholder="Add any notes here..."
+                  disabled={billingStep !== 'editing'}
+                ></textarea>
+              </div>
+            </div>
+            
+            {/* Summary */}
+            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+              <h3 className="font-bold text-lg mb-3">Order Summary</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span>Subtotal:</span>
+                  <span>${calculateSubtotal().toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Tax ({taxRate}%):</span>
+                  <span>${calculateTax().toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Discount:</span>
+                  <span>${discount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-lg pt-2 border-t">
+                  <span>Total:</span>
+                  <span>${calculateTotal().toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Error and Success Messages */}
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                {error}
+              </div>
+            )}
+            
+            {successMessage && (
+              <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+                {successMessage}
+              </div>
+            )}
+            
+            {/* Action Buttons */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+              {/* Apply Button - Step 1 */}
+              <button
+                onClick={handleApply}
+                disabled={cart.length === 0 || billingStep !== 'editing'}
+                className={`bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 
+                  disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center
+                  ${billingStep === 'editing' ? 'md:col-span-3' : 'md:col-span-1'}`}
+              >
+                <DocumentCheckIcon className="h-5 w-5 mr-2" />
+                Apply
+              </button>
+              
+              {/* Make Payment Button - Step 2 */}
+              {billingStep !== 'editing' && (
+                <button
+                  onClick={handlePayment}
+                  disabled={processingPayment || billingStep === 'payment-complete'}
+                  className="bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 
+                    disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
                 >
-                  <option value="Cash">Cash</option>
-                  <option value="Card">Card</option>
-                  <option value="UPI">UPI</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Discount ($)</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={discount}
-                  onChange={(e) => setDiscount(Number(e.target.value))}
-                  className="w-full p-2 border rounded"
-                  disabled={billingStep !== 'editing'}
-                />
-              </div>
+                  {processingPayment ? (
+                    <span className="flex items-center justify-center">
+                      <div className="animate-spin h-5 w-5 mr-2 border-2 border-white border-t-transparent rounded-full"></div>
+                      Processing...
+                    </span>
+                  ) : (
+                    <>
+                      <CreditCardIcon className="h-5 w-5 mr-2" />
+                      Make Payment
+                    </>
+                  )}
+                </button>
+              )}
+              
+              {/* Print Button - Step 3 */}
+              {billingStep === 'payment-complete' && (
+                <button
+                  onClick={handlePrint}
+                  className="bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 
+                    flex items-center justify-center"
+                >
+                  <PrinterIcon className="h-5 w-5 mr-2" />
+                  Print Invoice
+                </button>
+              )}
+              
+              {/* New Sale Button - After completion */}
+              {billingStep === 'payment-complete' && (
+                <button
+                  onClick={resetBilling}
+                  className="bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 
+                    flex items-center justify-center"
+                >
+                  <ShoppingCartIcon className="h-5 w-5 mr-2" />
+                  New Sale
+                </button>
+              )}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                className="w-full p-2 border rounded"
-                rows="2"
-                placeholder="Add any notes here..."
-                disabled={billingStep !== 'editing'}
-              ></textarea>
-            </div>
-          </div>
-          
-          {/* Summary */}
-          <div className="bg-gray-50 rounded-lg p-4 mb-4">
-            <h3 className="font-bold text-lg mb-3">Order Summary</h3>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span>Subtotal:</span>
-                <span>${calculateSubtotal().toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Tax ({taxRate}%):</span>
-                <span>${calculateTax().toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Discount:</span>
-                <span>${discount.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-lg pt-2 border-t">
-                <span>Total:</span>
-                <span>${calculateTotal().toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
-          
-          {/* Error and Success Messages */}
-          {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-              {error}
-            </div>
-          )}
-          
-          {successMessage && (
-            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-              {successMessage}
-            </div>
-          )}
-          
-          {/* Action Buttons */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-            {/* Apply Button - Step 1 */}
-            <button
-              onClick={handleApply}
-              disabled={cart.length === 0 || billingStep !== 'editing'}
-              className={`bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 
-                disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center
-                ${billingStep === 'editing' ? 'md:col-span-3' : 'md:col-span-1'}`}
-            >
-              <DocumentCheckIcon className="h-5 w-5 mr-2" />
-              Apply
-            </button>
-            
-            {/* Make Payment Button - Step 2 */}
-            {billingStep !== 'editing' && (
-              <button
-                onClick={handlePayment}
-                disabled={processingPayment || billingStep === 'payment-complete'}
-                className="bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 
-                  disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center"
-              >
-                {processingPayment ? (
-                  <span className="flex items-center justify-center">
-                    <div className="animate-spin h-5 w-5 mr-2 border-2 border-white border-t-transparent rounded-full"></div>
-                    Processing...
-                  </span>
-                ) : (
-                  <>
-                    <CreditCardIcon className="h-5 w-5 mr-2" />
-                    Make Payment
-                  </>
-                )}
-              </button>
-            )}
-            
-            {/* Print Button - Step 3 */}
-            {billingStep === 'payment-complete' && (
-              <button
-                onClick={handlePrint}
-                className="bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 
-                  flex items-center justify-center"
-              >
-                <PrinterIcon className="h-5 w-5 mr-2" />
-                Print Invoice
-              </button>
-            )}
-            
-            {/* New Sale Button - After completion */}
-            {billingStep === 'payment-complete' && (
-              <button
-                onClick={resetBilling}
-                className="bg-indigo-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-indigo-700 
-                  flex items-center justify-center"
-              >
-                <ShoppingCartIcon className="h-5 w-5 mr-2" />
-                New Sale
-              </button>
-            )}
           </div>
         </div>
       </div>
       
       {/* Scanner modal */}
-      {isOpen && (
-        <BarcodeScanner 
+      {isOpen && showScanner && (
+        <BarcodeScanner
           isOpen={showScanner} 
-          onClose={() => setShowScanner(false)} 
+          onClose={closeScanner}
           onScanComplete={handleScanComplete}
           isBilling={true}
         />
